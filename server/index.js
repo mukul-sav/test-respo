@@ -1,12 +1,16 @@
-// This file is used by Vercel to handle SSR requests
+// Production server entry point for Render
+const { createServer } = require('http');
 const { createPageRenderer } = require('vite-plugin-ssr');
 
-// The page renderer is the main API of vite-plugin-ssr
-const renderPage = createPageRenderer({ isProduction: true });
+const PORT = process.env.PORT || 3000;
+const isProduction = process.env.NODE_ENV === 'production';
 
-module.exports = async (req, res) => {
-  const { url } = req;
-  
+// The page renderer is the main API of vite-plugin-ssr
+const renderPage = createPageRenderer({ isProduction });
+
+const server = createServer(async (req, res) => {
+  const url = req.url;
+
   // Render the page
   const pageContextInit = { urlOriginal: url };
   const pageContext = await renderPage(pageContextInit);
@@ -31,4 +35,8 @@ module.exports = async (req, res) => {
   
   // Send the response
   res.end(body);
-};
+});
+
+server.listen(PORT, () => {
+  console.log(`Server running at http://localhost:${PORT}`);
+});
