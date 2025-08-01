@@ -1,84 +1,34 @@
-import express from 'express'
-import { renderPage } from 'vite-plugin-ssr/server'
-import { performance } from 'perf_hooks'
-import fs from 'fs'
-import path from 'path'
+// This file is used by Vercel to handle SSR requests
+const { createPageRenderer } = require('vite-plugin-ssr');
 
-const isProduction = process.env.NODE_ENV === 'production'
-const root = process.cwd()
-const statsPath = path.join(root, 'render-stats.json')
+// The page renderer is the main API of vite-plugin-ssr
+const renderPage = createPageRenderer({ isProduction: true });
 
-const app = express()
-
-if (isProduction) {
-  app.use(express.static(`${root}/dist/client`))
-} else {
-  const vite = await import('vite')
-  const viteDevMiddleware = (
-    await vite.createServer({
-      root,
-      server: { middlewareMode: true }
-    })
-  ).middlewares
-  app.use(viteDevMiddleware)
-}
-
-app.get('*', async (req, res, next) => {
-  const startTime = performance.now()
+module.exports = async (req, res) => {
+  const { url } = req;
   
-  try {
-    const pageContextInit = {
-      urlOriginal: req.originalUrl,
-      userAgent: req.headers['user-agent'],
-      renderStartTime: startTime
-    }
-    
-    const pageContext = await renderPage(pageContextInit)
-    const { httpResponse } = pageContext
-    
-    if (!httpResponse) return next()
-    
-    const { body, statusCode, contentType, earlyHints } = httpResponse
-    
-    if (earlyHints) {
-      res.writeEarlyHints({
-        link: earlyHints.map((e) => e.earlyHintLink)
-      })
-    }
-    
-    const endTime = performance.now()
-    const renderTime = endTime - startTime
-    
-    // Log render stats
-    if (isProduction) {
-      let stats = {}
-      try {
-        if (fs.existsSync(statsPath)) {
-          stats = JSON.parse(fs.readFileSync(statsPath, 'utf8'))
-        }
-      } catch (e) {
-        console.error('Error reading stats file:', e)
-      }
-      
-      const pagePath = req.path
-      if (!stats[pagePath]) stats[pagePath] = []
-      stats[pagePath].push({
-        timestamp: new Date().toISOString(),
-        renderTime,
-        isSSR: !pageContext.isStatic
-      })
-      
-      fs.writeFileSync(statsPath, JSON.stringify(stats, null, 2))
-    }
-    
-    res.status(statusCode).type(contentType)
-    res.send(body)
-  } catch (error) {
-    console.error(error)
-    return next(error)
+  // Render the page
+  const pageContextInit = { urlOriginal: url };
+  const pageContext = await renderPage(pageContextInit);
+  
+  // Handle 404s
+  if (!pageContext.httpResponse) {
+    res.statusCode = 404;
+    res.end('Not Found');
+    return;
   }
-})
-
-const port = process.env.PORT || 3000
-app.listen(port)
-console.log(`Server running at http://localhost:${port}`)
+  
+  const { body, statusCode, contentType, earlyHints } = pageContext.httpResponse;
+  
+  // Send early hints if available
+  if (earlyHints) {
+    res.writeEarlyHints({ link: earlyHints.map((e) => e.earlyHintLink) });
+  }
+  
+  // Set status code and content type
+  res.statusCode = statusCode;
+  res.setHeader('Content-Type', contentType);
+  
+  // Send the response
+  res.end(body);
+};
