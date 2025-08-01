@@ -1,6 +1,6 @@
-// Production server entry point for Render
-const { createServer } = require('http');
-const { createPageRenderer } = require('vite-plugin-ssr');
+// Production server entry point for Render - ES Module version
+import { createServer } from 'http';
+import { createPageRenderer } from 'vite-plugin-ssr';
 
 const PORT = process.env.PORT || 3000;
 const isProduction = process.env.NODE_ENV === 'production';
